@@ -1,0 +1,22 @@
+# # env
+__pycache__
+venv
+.env
+.DS_Store
+
+# files
+gfpgan
+images
+audio
+results
+checkpoints
+nohup.out
+*.json
+*.jsonl
+*.html
+
+# data
+*.js
+*.log
+data
+*.csv
