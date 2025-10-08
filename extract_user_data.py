@@ -105,10 +105,35 @@ def save_extracted_data(data: Dict[str, Any], output_file: str) -> None:
         json.dump(data, file, indent=2, ensure_ascii=False)
     print(f"\nExtracted data saved to: {output_file}")
 
+def save_text_format(data: Dict[str, Any], output_file: str) -> None:
+    """
+    Save extracted data to a text file in the specified format.
+    """
+    user_info = data['user_info']
+    
+    with open(output_file, 'w', encoding='utf-8') as file:
+        # Write user information
+        file.write(f"Name: {user_info['name']}\n")
+        file.write(f"Location: {user_info['location']}\n")
+        file.write(f"Description: {user_info['description']}\n")
+        file.write(f"Website: {user_info['website']}\n") 
+        file.write(f"Followers: {user_info['followersCount']}\n")
+        file.write(f"Following: {user_info['friendsCount']}\n")
+        file.write(f"KOL Follower Counts: {user_info['kolFollowersCount']}\n\n")
+        
+        # Write tweets
+        for i, tweet in enumerate(data['tweets'], 1):
+            file.write(f"Tweet {i}:\n\n")
+            file.write(f"Type: {tweet['type'].upper()}\n")
+            file.write(f"Text: {tweet['text']}\n\n")
+    
+    print(f"\nText format data saved to: {output_file}")
+
 if __name__ == "__main__":
     # File paths
-    input_file = "/Users/allen/Desktop/analyze_kol/data.json"
-    output_file = "/Users/allen/Desktop/analyze_kol/extracted_data.json"
+    input_file = "./data.json"
+    output_json_file = "./extracted_data.json"
+    output_text_file = "./extracted_data.txt"
     
     try:
         # Extract data
@@ -117,8 +142,11 @@ if __name__ == "__main__":
         # Print to console
         print_extracted_data(extracted_data)
         
-        # Save to file
-        save_extracted_data(extracted_data, output_file)
+        # Save to JSON file
+        save_extracted_data(extracted_data, output_json_file)
+        
+        # Save to text file
+        save_text_format(extracted_data, output_text_file)
         
         print(f"\nTotal tweets processed: {len(extracted_data['tweets'])}")
         
@@ -128,3 +156,5 @@ if __name__ == "__main__":
         print(f"Error: Invalid JSON format in {input_file}.")
     except Exception as e:
         print(f"Error: {str(e)}")
+        
+

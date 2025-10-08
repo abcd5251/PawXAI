@@ -30,8 +30,6 @@ class OpenAIModel:
                         "content": prompt
                     }
                 ],
-                temperature=self.temperature,
-                max_tokens=10000,
                 model=self.model, 
                 response_format={ "type": "json_object" }
             )
@@ -62,9 +60,7 @@ class OpenAIModel:
                         "content": prompt
                     }
                 ],
-                temperature=self.temperature,
                 model=self.model, 
-                max_tokens=10000,
             )
             
             response = chat_completion.choices[0].message.content

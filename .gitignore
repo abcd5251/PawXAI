@@ -18,5 +18,6 @@ nohup.out
 # data
 *.js
 *.log
+*.txt
 data
 *.csv
