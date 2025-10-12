@@ -15,7 +15,7 @@ TASK / REQUIREMENTS:
      "language_tags": [...],
      "ecosystem_tags": [...],
      "user_type_tags": [...],
-     "MBTI": "<4-letter MBTI or empty string>",
+     "MBTI": "<4-letter MBTI>",
      "summary": "<<=150 words plain English summary>>"
    }}
 
@@ -50,7 +50,7 @@ TASK / REQUIREMENTS:
      * Sensing/Intuition: focus on concrete data, numbers, step-by-step tutorials -> S; speculative, big-picture, conceptual threads -> N.
      * Thinking/Feeling: analytical, argumentative, explain-first style -> T; empathetic, community-focused, supportive language -> F.
      * Judging/Perceiving: structured schedules, roadmap posts, milestone updates -> J; exploratory, spontaneous, open-ended posts -> P.
-   - If evidence is weak or mixed, set MBTI to "" (empty string). MBTI here is a best-effort inference, not a certainty.
+     Important: You must always output a 4-letter MBTI code. If clear evidence is limited, do not leave MBTI blank—make a best-guess 4-letter MBTI based on the heuristics above and the user's observable tweeting behavior. The MBTI field must contain a 4-letter code (e.g., "INTJ"); guess when necessary.
 
 5. Summary (<=150 words):
    - One paragraph in plain English describing who this user likely is, their top interests, what they have posted about recently, and what they appear to be working on. Keep it evidence-based and under 150 words. Do not include private or speculative personal details.
@@ -59,7 +59,6 @@ TASK / REQUIREMENTS:
    - Return **only** the JSON object, nothing else (no comments, no surrounding markdown).
    - Ensure valid JSON (keys quoted, arrays, no trailing commas).
    - If a tag category has no matches, return an empty array [].
-   - If MBTI cannot be inferred with reasonable evidence, set MBTI to "".
    - The summary must be plain English text, max 150 words.
 
 EXAMPLE OUTPUT:

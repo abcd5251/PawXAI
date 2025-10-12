@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, List
@@ -11,7 +12,6 @@ from dotenv import load_dotenv
 from models.schema import TwitterUsernameRequest, TwitterAnalysisResponse
 from models.model import OpenAIModel
 from prompts.analyze import analyze_prompt
-from pydantic import ValidationError
 
 load_dotenv()
 
@@ -19,6 +19,16 @@ app = FastAPI(
     title="Twitter KOL Analysis API",
     description="API for analyzing Twitter KOL (Key Opinion Leader) data",
     version="1.0.0"
+)
+
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Custom exception handlers
