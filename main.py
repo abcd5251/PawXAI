@@ -243,7 +243,7 @@ async def analyze_twitter_user(request: TwitterUsernameRequest):
         headers = {
             "X-API-Key": "test",
             "Content-Type": "application/json",
-            "User-Agent": "Twitter-KOL-Analysis-API/1.0.0"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         
         # Set up query parameters
