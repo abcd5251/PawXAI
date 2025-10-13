@@ -20,13 +20,13 @@ TASK / REQUIREMENTS:
    }}
 
 2. Tag rules:
-   - Only choose tags from the allowed lists below. If none apply for a category, return an empty list [].
+   - Only choose tags from the allowed lists below. If none apply for a category, return a list containing only the string "other", like this: ["other"].
    - language_tags allowed values:
-     ["chinese","japanese","korean","english","french","spanish","thai","italian","german","russian","vietnamese"]
+     {LANGUAGE_TAGS}
    - ecosystem_tags allowed values:
-     ["ethereum","solana","sui","aptos","near","polkadot","avalanche","bnb_chain","cardano","tezos","arbitrum","optimism","zkSync","starknet","polygon_pos","polygon_zkevm","base","mantle","linea","scroll","cosmos","hyperliquid","virtuals","osmosis","injective","rollups","zk_rollups"]
+     {ECOSYSTEM_TAGS}
    - user_type_tags allowed values:
-     ["developer","founder & CEO","nft_collector","alpha_hunter","gamefi_player","defi_user","airdrop_hunter","meme_creator","technical_sharer","trader","market_maker","arbitrageur","yield_farmer","onchain_analyst","community","researcher","other"]
+     {USER_TYPE_TAGS}
 
 3. How to determine tags:
    - language_tags (IMPORTANT — conservative rule):

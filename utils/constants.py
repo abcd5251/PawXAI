@@ -36,7 +36,6 @@ ECOSYSTEM_TAGS =  [
     "cosmos",
     "hyperliquid",
     "virtuals",
-    "osmosis",
     "injective",
     "rollups",
     "zk_rollups",
