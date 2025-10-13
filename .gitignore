@@ -13,7 +13,6 @@ results
 checkpoints
 nohup.out
 *.json
-*.jsonl
 *.html
 
 # data
