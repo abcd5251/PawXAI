@@ -5,6 +5,9 @@ venv
 .DS_Store
 .python-version
 
+# encrypted vaults
+secrets
+
 # files
 gfpgan
 images

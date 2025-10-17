@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import re
+import os
 import json
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -288,14 +289,24 @@ async def analyze_twitter_user(request: TwitterUsernameRequest):
                 if tweets_data:
                     first_user = tweets_data[0].get('user', {})
 
-                # Add user info to the analysis response
+                # Add user info to the analysis response with desired ordering
                 if isinstance(analysis_json, dict):
-                    analysis_json['location'] = first_user.get('location')
-                    analysis_json['description'] = first_user.get('description')
-                    analysis_json['website'] = first_user.get('website')
-                    analysis_json['followersCount'] = first_user.get('followersCount')
-                    analysis_json['friendsCount'] = first_user.get('friendsCount')
-                    analysis_json['kolFollowersCount'] = first_user.get('kolFollowersCount')
+                    # Build a new dict to ensure the following keys appear first
+                    ordered = {
+                        'username': request.username,
+                        'followersCount': first_user.get('followersCount'),
+                        'friendsCount': first_user.get('friendsCount'),
+                        'kolFollowersCount': first_user.get('kolFollowersCount'),
+                        'location': first_user.get('location'),
+                        'description': first_user.get('description'),
+                        'website': first_user.get('website'),
+                    }
+                    # Append original analysis content after the above keys
+                    for k, v in analysis_json.items():
+                        if k not in ordered:
+                            ordered[k] = v
+                    analysis_json = ordered
+                    
                 
                 
                 # Handle both list and dictionary responses

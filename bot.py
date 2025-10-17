@@ -36,7 +36,12 @@ RESPONSES = {
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [[InlineKeyboardButton(text, callback_data=data)] for (text, data) in BUTTONS]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Hello! How can I help you", reply_markup=reply_markup)
+    addr = os.getenv("AGENT_BUYER_WALLET_ADDRESS")
+    if addr:
+        greeting = f"Hello! How can I help you\nYour Agent wallet address: {addr}"
+    else:
+        greeting = "Hello! How can I help you\nYour Agent address not configured."
+    await update.message.reply_text(greeting, reply_markup=reply_markup)
 
 async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -137,10 +142,9 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     lines.append(f"   Description: {item.get('description', '')}")
                     lines.append(f"   Location: {item.get('location', '')}")
                     lines.append(f"   Website: {item.get('website', '')}")
-                    lines.append(f"   Language Tags: {item.get('language_tag', '')}")
                     lines.append(f"   Ecosystem Tags: {item.get('ecosystem_tags', '')}")
-                    lines.append(f"   Language Tags: {item.get('language_tag', '')}")
-                    lines.append(f"   User Tags: {item.get('user_type_tags', '')}")
+                    lines.append(f"   Language Tags: {item.get('language_tags', '')}")
+                    lines.append(f"   User Type Tags: {item.get('user_type_tags', '')}")
                     lines.append(f"   MBTI: {item.get('MBTI', '')}")
                     lines.append(f"   Summary: {item.get('summary', '')}")
                     lines.append("")
@@ -152,6 +156,13 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 buf = io.BytesIO(full_json.encode("utf-8"))
                 buf.seek(0)
                 await query.message.reply_document(document=buf, filename="find_kol_results.json")
+                # Auto-return to main menu like analyze flow
+                context.user_data.pop("kol_flow_active", None)
+                context.user_data.pop("kol_filter", None)
+                context.user_data.pop("awaiting_kol_field", None)
+                await query.message.reply_text(
+                    "Back to menu:", reply_markup=_main_keyboard()
+                )
             else:
                 try:
                     err = resp.json()
@@ -163,11 +174,27 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text(f"Request failed: {str(e)}")
         return
 
+    if query.data == "kol_back_menu":
+        # Reset KOL flow state and show the main menu
+        context.user_data.pop("kol_flow_active", None)
+        context.user_data.pop("kol_filter", None)
+        context.user_data.pop("awaiting_kol_field", None)
+        await query.message.reply_text("How can I help you", reply_markup=_main_keyboard())
+        return
+
     if query.data == "kol_cancel":
         context.user_data.pop("kol_flow_active", None)
         context.user_data.pop("kol_filter", None)
         context.user_data.pop("awaiting_kol_field", None)
         await query.message.reply_text("Cancelled. Back to menu:", reply_markup=_main_keyboard())
+        return
+
+    if query.data == "show_wallet":
+        addr = os.getenv("AGENT_BUYER_WALLET_ADDRESS")
+        if addr:
+            await query.message.reply_text(f"Buyer wallet address: {addr}")
+        else:
+            await query.message.reply_text("Buyer wallet address not configured. Set AGENT_BUYER_WALLET_ADDRESS in .env.")
         return
 
     response_text = RESPONSES.get(query.data, "Unknown selection")
@@ -190,6 +217,11 @@ def _kol_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("View Current Filters", callback_data="kol_view_filters")],
         [InlineKeyboardButton("Search", callback_data="kol_search")],
         [InlineKeyboardButton("Cancel", callback_data="kol_cancel")],
+    ])
+
+def _back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Back to menu", callback_data="kol_back_menu")]
     ])
 
 def canonicalize_tags(input_text: str, allowed: list[str]):
@@ -303,9 +335,6 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     buf = io.BytesIO(text_preview.encode("utf-8"))
                     buf.seek(0)
                     await update.message.reply_document(document=buf, filename=f"analysis_{username}.json")
-
-                    if message:
-                        await update.message.reply_text(message)
             else:
                 try:
                     err = resp.json()
