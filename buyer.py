@@ -5,7 +5,7 @@ from typing import Optional
 from dotenv import load_dotenv
 import os
 
-from virtuals_acp import ACPMemo
+from virtuals_acp.memo import ACPMemo
 from virtuals_acp.client import VirtualsACP
 from virtuals_acp.env import EnvSettings
 from virtuals_acp.job import ACPJob
@@ -52,7 +52,7 @@ def twitter_analysis_buyer():
 
     # Browse available Twitter analysis agents
     relevant_agents = acp.browse_agents(
-        keyword="Bob",  
+        keyword="PawXAI",  
         sort_by=[
             ACPAgentSort.SUCCESSFUL_JOB_COUNT,
         ],
@@ -60,7 +60,6 @@ def twitter_analysis_buyer():
         graduation_status=ACPGraduationStatus.ALL,
         online_status=ACPOnlineStatus.ALL,
     )
-    print(f"Found {len(relevant_agents)} Twitter analysis agents")
 
     if not relevant_agents:
         print("No Twitter analysis agents found. Make sure your seller agent is registered and online.")

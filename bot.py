@@ -9,6 +9,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from dotenv import load_dotenv
 import httpx
 from utils.constants import LANGUAGE_TAGS, ECOSYSTEM_TAGS, USER_TYPE_TAGS
+from models.model import OpenAIModel
+from prompts.qa import qa_prompt
+
+with open("tweets_output.txt", "r", encoding="utf-8") as f:
+    content = f.read()
+
 
 load_dotenv()
 
@@ -54,6 +60,14 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
+    # Monitor account flow: ask for keyword/slug
+    if query.data == "monitor_account":
+        context.user_data["awaiting_monitor_keyword"] = True
+        await query.message.reply_text(
+            "Please input a keyword to find users who mentioned it."
+        )
+        return
+
     # Start Find KOL flow
     if query.data == "find_kol":
         context.user_data["kol_flow_active"] = True
@@ -61,9 +75,6 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.message.reply_text(
             (
                 "Find KOL: Choose filters below. For tags, you can enter comma-separated values.\n"
-                f"Available ecosystem tags: {', '.join(ECOSYSTEM_TAGS)}\n"
-                f"Available language tags: {', '.join(LANGUAGE_TAGS)}\n"
-                f"Available user type tags: {', '.join(USER_TYPE_TAGS)}"
             ),
             reply_markup=_kol_keyboard()
         )
@@ -256,6 +267,71 @@ def summarize_filters(f: dict) -> str:
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
 
+    # Monitor keyword handling
+    if context.user_data.get("awaiting_monitor_keyword"):
+        slug = text.strip()
+        api_url_tpl = os.getenv(
+            "MONITOR_USERS_API_URL",
+            "http://localhost:8000/keywordMonitors/{slug}/users",
+        )
+        api_url = api_url_tpl.replace("{slug}", slug)
+        timeout = float(os.getenv("ANALYZE_API_TIMEOUT", "50"))
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.get(api_url)
+            if resp.status_code == 200:
+                body = resp.json()
+                # Extract raw list and compute total count
+                raw_list = None
+                if isinstance(body, list):
+                    raw_list = body
+                elif isinstance(body, dict):
+                    for key in ("users", "data", "results"):
+                        v = body.get(key)
+                        if isinstance(v, list):
+                            raw_list = v
+                            break
+                total_count = len(raw_list) if isinstance(raw_list, list) else 0
+                # Build concise summary
+                lines = [f"Total: {total_count} — Number of KOL talk about this keyword recently"]
+                if isinstance(raw_list, list) and raw_list:
+                    top_lines = []
+                    for u in raw_list[:10]:
+                        uname = (
+                            (u.get("screenName") if isinstance(u, dict) else None)
+                            or (u.get("username") if isinstance(u, dict) else None)
+                            or (u.get("name") if isinstance(u, dict) else None)
+                            or str(u)
+                        )
+                        top_lines.append(f"- {uname}")
+                    if top_lines:
+                        lines.append("Top matched users:")
+                        lines.extend(top_lines)
+                await update.message.reply_text("\n".join(lines))
+                # Send JSON file including total count (count based on raw list)
+                json_to_send = {
+                    "keyword": slug,
+                    "total": total_count,
+                    "raw": raw_list if isinstance(raw_list, list) else [],
+                }
+                text_preview = json.dumps(json_to_send, indent=2, ensure_ascii=False)
+                buf = io.BytesIO(text_preview.encode("utf-8"))
+                buf.seek(0)
+                await update.message.reply_document(document=buf, filename=f"monitor_users_{slug}.json")
+            else:
+                try:
+                    err = resp.json()
+                    err_msg = err.get("message") or err.get("detail") or resp.text
+                except Exception:
+                    err_msg = resp.text
+                await update.message.reply_text(f"API error ({resp.status_code}): {err_msg[:500]}")
+        except httpx.HTTPError as e:
+            await update.message.reply_text(f"Request failed: {str(e)}")
+        finally:
+            context.user_data["awaiting_monitor_keyword"] = False
+            await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        return
+
     # KOL filter input handling
     awaiting_field = context.user_data.get("awaiting_kol_field")
     if awaiting_field:
@@ -350,6 +426,17 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Reset conversation flag and show main keyboard again
             context.user_data["awaiting_username"] = False
             await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        return
+
+    # Free-text QA fallback (no buttons pressed / not in a flow)
+    try:
+        qa_instance = OpenAIModel(system_prompt=qa_prompt, temperature=0)
+        total_text = text
+        prompt = f"trending_tweets:{content}\nquestion:{total_text}\nOUTPUT:"
+        analysis_result, input_tokens_length, output_tokens_length = qa_instance.generate_string_text(prompt)
+        await update.message.reply_text(str(analysis_result), reply_markup=_back_keyboard())
+    except Exception as e:
+        await update.message.reply_text(f"LLM error: {str(e)}", reply_markup=_back_keyboard())
 
 def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")

@@ -7,7 +7,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from virtuals_acp import ACPMemo
+from virtuals_acp.memo import ACPMemo
 from virtuals_acp.client import VirtualsACP
 from virtuals_acp.env import EnvSettings
 from virtuals_acp.job import ACPJob

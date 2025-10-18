@@ -516,6 +516,66 @@ def filter_combined(payload: CombinedFilter):
     filtered_results = [item for item in all_data if passes_filters(item, payload)]
     return {"num_KOL": len(filtered_results), "results": filtered_results}
 
+@app.get("/keywordMonitors/{slug}/users")
+async def list_monitor_users(slug: str):
+    """
+    Proxy: List users who have tweeted content matched by the monitor.
+    Calls Foxhole API `GET /keywordMonitors/{slug}/users` and returns the JSON.
+    """
+    api_url = f"https://foxhole.bot/api/v1/keywordMonitors/{slug}/users"
+    headers = {
+        "X-API-Key": os.getenv("FOXHOLE_API_KEY"),
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X)"
+    }
+    try:
+        resp = requests.get(api_url, headers=headers, timeout=30)
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Invalid JSON response from external API"
+                )
+            return data
+        elif resp.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key for external service"
+            )
+        elif resp.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Monitor slug '{slug}' not found"
+            )
+        elif resp.status_code == 429:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded for external API. Please try again later."
+            )
+        else:
+            msg = resp.text[:200] if resp.text else ""
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"External API returned status code {resp.status_code}: {msg}"
+            )
+    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Request timeout - the external API took too long to respond (>30 seconds)"
+        )
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Connection error - unable to reach the external API. Please check your internet connection."
+        )
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Request error: {str(e)}"
+        )
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
