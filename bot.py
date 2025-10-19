@@ -162,8 +162,16 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 summary_text = "\n".join(lines).rstrip()
                 await query.message.reply_text(summary_text)
 
-                # Send full results as JSON file
+                # Prepare JSON text
                 full_json = json.dumps(sorted_results, indent=2, ensure_ascii=False)
+                # Try to upload JSON and share a link for smoother viewing
+                upload_link = await _upload_json_and_get_link(full_json, "find_kol_results.json")
+                if upload_link:
+                    link_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Open JSON", url=upload_link)]])
+                    await query.message.reply_text(
+                        f"Shareable JSON link:\n{upload_link}", reply_markup=link_keyboard
+                    )
+                # Also send the JSON file as a document
                 buf = io.BytesIO(full_json.encode("utf-8"))
                 buf.seek(0)
                 await query.message.reply_document(document=buf, filename="find_kol_results.json")
@@ -208,6 +216,26 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text("Buyer wallet address not configured. Set AGENT_BUYER_WALLET_ADDRESS in .env.")
         return
 
+    if query.data == "latest_trending":
+        file_path = os.getenv("LATEST_NEWS_FILE", "./data/latest_news.txt")
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                news = f.read().strip()
+            if not news:
+                await query.message.reply_text("(latest news file is empty)")
+            else:
+                max_len = 4000
+                for i in range(0, len(news), max_len):
+                    await query.message.reply_text(news[i:i+max_len])
+            await query.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        except FileNotFoundError:
+            await query.message.reply_text("File not found: ./data/latest_news.txt")
+            await query.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        except Exception as e:
+            await query.message.reply_text(f"Failed to read latest news: {str(e)}")
+            await query.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        return
+
     response_text = RESPONSES.get(query.data, "Unknown selection")
     # Sends a new message to keep the original keyboard visible
     await query.message.reply_text(response_text)
@@ -234,6 +262,57 @@ def _back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Back to menu", callback_data="kol_back_menu")]
     ])
+
+# Upload JSON to a paste service and return a shareable link
+# Tries multiple services for robustness: 0x0.st, paste.rs
+async def _upload_json_and_get_link(json_text: str, filename: str) -> str | None:
+    # Configure candidates via env: UPLOAD_JSON_URLS="https://0x0.st,https://paste.rs"
+    urls_env = os.getenv("UPLOAD_JSON_URLS")
+    candidates = [u.strip() for u in urls_env.split(",") if u.strip()] if urls_env else []
+    primary = os.getenv("UPLOAD_JSON_URL", "https://0x0.st")
+    if primary and primary not in candidates:
+        candidates.insert(0, primary)
+    # Ensure common fallbacks
+    if "https://0x0.st" not in candidates:
+        candidates.append("https://0x0.st")
+    if "https://paste.rs" not in candidates:
+        candidates.append("https://paste.rs")
+
+    timeout = float(os.getenv("UPLOAD_JSON_TIMEOUT", os.getenv("ANALYZE_API_TIMEOUT", "50")))
+    for url in candidates:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                if "0x0.st" in url:
+                    # 0x0.st expects multipart form with key 'file'
+                    resp = await client.post(url, files={
+                        "file": (filename, json_text, "application/json")
+                    })
+                    if resp.status_code == 200:
+                        link = resp.text.strip()
+                        if link.startswith("http"):
+                            return link
+                elif "paste.rs" in url:
+                    # paste.rs accepts plain text body
+                    resp = await client.post(url, content=json_text.encode("utf-8"), headers={
+                        "Content-Type": "text/plain; charset=utf-8"
+                    })
+                    if resp.status_code in (200, 201):
+                        link = resp.text.strip()
+                        if link.startswith("http"):
+                            return link
+                else:
+                    # Generic: attempt multipart upload
+                    resp = await client.post(url, files={
+                        "file": (filename, json_text, "application/json")
+                    })
+                    if resp.status_code in (200, 201):
+                        link = resp.text.strip()
+                        if link.startswith("http"):
+                            return link
+        except httpx.HTTPError:
+            # Try next candidate
+            continue
+    return None
 
 def canonicalize_tags(input_text: str, allowed: list[str]):
     allowed_map = {t.lower(): t for t in allowed}
@@ -308,16 +387,27 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         lines.append("Top matched users:")
                         lines.extend(top_lines)
                 await update.message.reply_text("\n".join(lines))
-                # Send JSON file including total count (count based on raw list)
+                # Prepare JSON text (count based on raw list)
                 json_to_send = {
                     "keyword": slug,
                     "total": total_count,
                     "raw": raw_list if isinstance(raw_list, list) else [],
                 }
                 text_preview = json.dumps(json_to_send, indent=2, ensure_ascii=False)
+
+                # Try to upload JSON and share a link for smoother viewing
+                file_name = f"monitor_users_{slug}.json"
+                upload_link = await _upload_json_and_get_link(text_preview, file_name)
+                if upload_link:
+                    link_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Open JSON", url=upload_link)]])
+                    await update.message.reply_text(
+                        f"Shareable JSON link:\n{upload_link}", reply_markup=link_keyboard
+                    )
+
+                # Also send the JSON file as a document
                 buf = io.BytesIO(text_preview.encode("utf-8"))
                 buf.seek(0)
-                await update.message.reply_document(document=buf, filename=f"monitor_users_{slug}.json")
+                await update.message.reply_document(document=buf, filename=file_name)
             else:
                 try:
                     err = resp.json()
@@ -400,17 +490,25 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         f"No analysis data returned for @{username}."
                     )
                 else:
-                    # Send analysis_json as formatted text (truncated) and as a file
+                    # Send shareable link first, then file, then truncated preview
                     text_preview = json.dumps(data, indent=2, ensure_ascii=False)
+                    file_name = f"analysis_{username}.json"
+                    upload_link = await _upload_json_and_get_link(text_preview, file_name)
+                    if upload_link:
+                        link_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Open JSON", url=upload_link)]])
+                        await update.message.reply_text(
+                            f"Shareable JSON link:\n{upload_link}", reply_markup=link_keyboard
+                        )
+                    # Send the JSON file as a document
+                    buf = io.BytesIO(text_preview.encode("utf-8"))
+                    buf.seek(0)
+                    await update.message.reply_document(document=buf, filename=file_name)
+                    # Finally show truncated preview
                     max_len = 4000
                     preview = text_preview if len(text_preview) <= max_len else text_preview[:max_len] + "\n... (truncated)"
                     await update.message.reply_text(
                         f"Analysis JSON for @{username}:\n{preview}"
                     )
-
-                    buf = io.BytesIO(text_preview.encode("utf-8"))
-                    buf.seek(0)
-                    await update.message.reply_document(document=buf, filename=f"analysis_{username}.json")
             else:
                 try:
                     err = resp.json()
