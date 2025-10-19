@@ -216,6 +216,14 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text("Buyer wallet address not configured. Set AGENT_BUYER_WALLET_ADDRESS in .env.")
         return
 
+    if query.data == "news_trading":
+        # Prompt user for the coin to observe
+        context.user_data["awaiting_news_coin"] = True
+        await query.message.reply_text(
+            "News Trading: Which coin to observe? Supported: BTC, ETH, Virtuals"
+        )
+        return
+
     if query.data == "latest_trending":
         file_path = os.getenv("LATEST_NEWS_FILE", "./data/latest_news.txt")
         try:
@@ -345,6 +353,18 @@ def summarize_filters(f: dict) -> str:
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
+
+    # News Trading coin input
+    if context.user_data.get("awaiting_news_coin"):
+        coin = text.strip().upper()
+        mapping = {"BTC": "1", "ETH": "2", "VIRTUALS": "3"}
+        if coin in mapping:
+            await update.message.reply_text(mapping[coin])
+        else:
+            await update.message.reply_text("Unsupported coin. Supported: BTC, ETH, Virtuals")
+        context.user_data["awaiting_news_coin"] = False
+        await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        return
 
     # Monitor keyword handling
     if context.user_data.get("awaiting_monitor_keyword"):

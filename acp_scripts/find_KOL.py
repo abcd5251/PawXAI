@@ -95,14 +95,14 @@ def buyer_2():
             and memo_to_sign is not None
             and memo_to_sign.next_phase == ACPJobPhase.TRANSACTION
         ):
-            logger.info(f"Paying and accepting requirement for job {job.id}")
+            logger.info(f"Paying for job {job.id}")
             try:
-                job.pay_and_accept_requirement()
+                job.pay(job.price)
                 logger.info(f"Job {job.id} paid")
             except ACPError as e:
-                logger.error(f"Failed to pay/accept requirement for job {job.id}: {e}")
+                logger.error(f"Failed to pay for job {job.id}: {e}")
             except Exception as e:
-                logger.error(f"Unexpected error during pay_and_accept_requirement: {e}")
+                logger.error(f"Unexpected error during pay: {e}")
         elif (
             job.phase == ACPJobPhase.TRANSACTION
             and memo_to_sign is not None
@@ -118,11 +118,20 @@ def buyer_2():
         elif job.phase == ACPJobPhase.REJECTED:
             logger.info(f"Job {job.id} rejected by seller")
 
+    def on_evaluate(job: ACPJob):
+        logger.info(f"Evaluation function called for job {job.id}")
+        try:
+            job.evaluate(True)
+            logger.info(f"Job {job.id} evaluated and approved")
+        except ACPError as e:
+            logger.error(f"Evaluate failed for job {job.id}: {e}")
+
     acp_client = VirtualsACP(
         wallet_private_key=os.getenv("WHITELISTED_WALLET_PRIVATE_KEY"),
         agent_wallet_address=os.getenv("AGENT_BUYER_WALLET_ADDRESS"),
         entity_id=int(os.getenv("BUYER_ENTITY_ID")),
         on_new_task=on_new_task,
+        on_evaluate=on_evaluate,
     )
 
     try:
