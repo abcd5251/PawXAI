@@ -143,8 +143,8 @@ def main():
     
     # Data Range 1 hour, For example
     now_utc = datetime.utcnow()
-    after_date = now_utc - timedelta(hours=11)
-    before_date = now_utc - timedelta(hours=8)
+    after_date = now_utc - timedelta(days=2)
+    before_date = now_utc - timedelta(days=1)
     created_after_str = after_date.strftime('%Y-%m-%dT%H:%M:%SZ')
     created_before_str = before_date.strftime('%Y-%m-%dT%H:%M:%SZ')
 

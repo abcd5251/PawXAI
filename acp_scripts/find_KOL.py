@@ -70,8 +70,13 @@ def build_combined_filter_payload() -> Dict[str, Any]:
     return payload
 
 
+# Normalize any local host like 0.0.0.0/0.0.0.1/localhost to 127.0.0.1
+def _sanitize_local_url(url: str) -> str:
+    return (url or "").replace("://0.0.0.0", "://127.0.0.1").replace("://0.0.0.1", "://127.0.0.1").replace("://localhost", "://127.0.0.1")
+
 def call_filter_combined_api(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     url = os.getenv("KOL_API_URL", "http://127.0.0.1:8000/filter/combined")
+    url = _sanitize_local_url(url)
     try:
         logger.info(f"POST {url} with payload: {json.dumps(payload)}")
         resp = requests.post(url, json=payload, timeout=30)

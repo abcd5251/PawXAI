@@ -53,6 +53,35 @@ def _extract_raw_list(body: Any) -> List[Any]:
                 return v
     return []
 
+# Added: robust output URL extractor for different deliverable formats
+def _extract_output_url(deliverable: Any) -> Optional[str]:
+    import re
+    # Direct dict with output field
+    if isinstance(deliverable, dict):
+        v = deliverable.get("output")
+        if isinstance(v, str) and v.startswith("http"):
+            return v
+        # IDeliverable-like structure: {"type": "text", "value": "..."}
+        val = deliverable.get("value")
+        if isinstance(val, str):
+            m = re.search(r"https?://\S+", val)
+            if m:
+                return m.group(0)
+        if isinstance(val, dict):
+            v2 = val.get("output")
+            if isinstance(v2, str) and v2.startswith("http"):
+                return v2
+    # Plain string deliverable
+    elif isinstance(deliverable, str):
+        m = re.search(r"https?://\S+", deliverable)
+        if m:
+            return m.group(0)
+    return None
+
+# Normalize any local host like 0.0.0.0/0.0.0.1/localhost to 127.0.0.1
+def _sanitize_local_url(url: str) -> str:
+    return (url or "").replace("://0.0.0.0", "://127.0.0.1").replace("://0.0.0.1", "://127.0.0.1").replace("://localhost", "://127.0.0.1")
+
 
 def call_monitor_users_api(slug: str) -> Optional[Any]:
     """
@@ -63,6 +92,7 @@ def call_monitor_users_api(slug: str) -> Optional[Any]:
         "MONITOR_USERS_API_URL",
         "http://127.0.0.1:8000/keywordMonitors/{slug}/users",
     )
+    url_tpl = _sanitize_local_url(url_tpl)
     url = url_tpl.replace("{slug}", slug)
     try:
         logger.info(f"GET {url}")
@@ -111,8 +141,7 @@ def buyer_keyword_kol():
             deliverable = job.deliverable
             output_url = None
             try:
-                if isinstance(deliverable, dict):
-                    output_url = deliverable.get("output")
+                output_url = _extract_output_url(deliverable)
             except Exception:
                 output_url = None
             if output_url:
@@ -158,26 +187,33 @@ def buyer_keyword_kol():
 
     chosen_agent = relevant_agents[0]
 
-    def _select_keyword_offering(agent) -> tuple[int, Any]:
+    def _select_keyword_offering(agent) -> Optional[tuple[int, Any]]:
         try:
             for idx, off in enumerate(getattr(agent, "offerings", []) or []):
                 schema = getattr(off, "requirement_schema", None)
                 if isinstance(schema, dict):
                     req = schema.get("required") or []
                     props = schema.get("properties") or {}
-                    if "keyword" in req and isinstance(props.get("keyword"), dict):
-                        return idx, off
+                    # Prefer offerings that explicitly require a string 'keyword'
+                    kw = props.get("keyword")
+                    if "keyword" in req and isinstance(kw, dict):
+                        t = kw.get("type")
+                        if t in (None, "string"):
+                            return idx, off
         except Exception:
             pass
-        # Fallback to env index or 0
+        # Safe fallback to env index or 0
+        offs = getattr(agent, "offerings", []) or []
         fallback_idx = int(os.getenv("ACP_OFFERING_INDEX", "0"))
-        return fallback_idx, agent.offerings[fallback_idx]
+        if 0 <= fallback_idx < len(offs):
+            return fallback_idx, offs[fallback_idx]
+        return None
 
-    offering_index = 2
-    if not getattr(chosen_agent, "offerings", None) or len(chosen_agent.offerings) <= offering_index:
-        logger.error("Selected agent has no offering at index 2. Please verify seller offerings.")
+    selected = _select_keyword_offering(chosen_agent)
+    if not selected:
+        logger.error("No offering requiring 'keyword' found. Set ACP_OFFERING_INDEX or ensure seller offers keyword service.")
         return
-    chosen_job_offering = chosen_agent.offerings[offering_index]
+    offering_index, chosen_job_offering = selected
     print("job offering :", chosen_job_offering)
     logger.info(f"Chosen offering[{offering_index}]: {chosen_job_offering}")
 
@@ -203,7 +239,7 @@ def buyer_keyword_kol():
     if top_unames:
         logger.info("Top matched users: " + ", ".join(top_unames))
 
-    # Initiate job with service requirement (include slug and preview summary)
+    # Initiate job with service requirement (only keyword per schema)
     service_requirement: Dict[str, Any] = {
         "keyword": keyword
     }

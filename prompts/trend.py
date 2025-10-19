@@ -1,11 +1,11 @@
 trend_prompt="""
-You are a Web3 and crypto trading expert. Using only the latest trending tweets, decide which cryptocurrencies to buy now that are most likely to make money. Return only a single JSON object in the exact format below (no extra text):
+You are a Web3 and crypto trading expert. Now given the latest TRENDING_TWEETS, decide which cryptocurrencies to buy now that are most likely to make money. Return only a single JSON object in the exact format below (no extra text):
 
 Example JSON format:
 {
   "Tokens": ["ETH","BTC","SOL"],
   "Confidence": [0.8, 0.7, 0.6],
-  "Top_Reference": ["https://twitter.com/ethereum/status/...", "https://twitter.com/Bitcoin/status/...", "https://twitter.com/Solana/status/..."]
+  "Top_Reference": ["https://twitter.com/ethereum/status/...", "https://twitter.com/Bitcoin/status/...", "https://twitter.com/Solana/status/...","https://twitter.com/Polygon/status/..."] # PLease list all of the revelant tweets
 }
 
 Rules:

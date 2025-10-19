@@ -11,9 +11,14 @@ import httpx
 from utils.constants import LANGUAGE_TAGS, ECOSYSTEM_TAGS, USER_TYPE_TAGS
 from models.model import OpenAIModel
 from prompts.qa import qa_prompt
+from prompts.trend import trend_prompt
 
-with open("tweets_output.txt", "r", encoding="utf-8") as f:
-    content = f.read()
+TWEETS_OUTPUT_FILE = os.getenv("TWEETS_OUTPUT_FILE", "./data/tweets_output.txt")
+try:
+    with open(TWEETS_OUTPUT_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+except Exception:
+    content = ""
 
 
 load_dotenv()
@@ -28,7 +33,7 @@ BUTTONS = [
     ("Analyze account", "analyze_account"),
     ("Find KOL", "find_kol"),
     ("Monitor account", "monitor_account"),
-    ("News Trading", "news_trading"),
+    ("Trending Coins", "trending_coins"),
 ]
 
 RESPONSES = {
@@ -36,7 +41,7 @@ RESPONSES = {
     "analyze_account": "2 for Analyze account",
     "find_kol": "3 for Find KOL",
     "monitor_account": "4 for Monitor account",
-    "news_trading": "5 for News Trading",
+    "trending_coins": "5 for Trending Coins",
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,11 +221,11 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text("Buyer wallet address not configured. Set AGENT_BUYER_WALLET_ADDRESS in .env.")
         return
 
-    if query.data == "news_trading":
-        # Prompt user for the coin to observe
+    if query.data == "trending_coins":
+        # Prompt user to select risk level
         context.user_data["awaiting_news_coin"] = True
         await query.message.reply_text(
-            "News Trading: Which coin to observe? Supported: BTC, ETH, Virtuals"
+            "Please select your risk level\n- low risk for analyze ETH\n- high risk for other altcoin"
         )
         return
 
@@ -356,12 +361,42 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # News Trading coin input
     if context.user_data.get("awaiting_news_coin"):
-        coin = text.strip().upper()
+        risk_or_coin = text.strip()
+
+        if risk_or_coin.lower() == "high risk":
+            file_path = os.getenv("TWEETS_OUTPUT_FILE", "./data/tweets_output.txt")
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+            except FileNotFoundError:
+                await update.message.reply_text(f"File not found: {file_path}")
+                context.user_data["awaiting_news_coin"] = False
+                await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+                return
+            except Exception as e:
+                await update.message.reply_text(f"Failed to read tweets_output.txt: {str(e)}")
+                context.user_data["awaiting_news_coin"] = False
+                await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+                return
+
+            trending_instance = OpenAIModel(system_prompt=trend_prompt, temperature=0)
+            prompt = f"trending_tweets:{content}OUTPUT:"
+            try:
+                result, _, _ = trending_instance.generate_string_text(prompt)
+            except Exception as e:
+                result = f"Model invocation error: {str(e)}"
+
+            await _send_long_text(update, str(result))
+            context.user_data["awaiting_news_coin"] = False
+            await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+            return
+
+        coin = risk_or_coin.upper()
         mapping = {"BTC": "1", "ETH": "2", "VIRTUALS": "3"}
         if coin in mapping:
             await update.message.reply_text(mapping[coin])
         else:
-            await update.message.reply_text("Unsupported coin. Supported: BTC, ETH, Virtuals")
+            await update.message.reply_text("Unsupported input. Enter 'high risk', or BTC/ETH/Virtuals.")
         context.user_data["awaiting_news_coin"] = False
         await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
         return
@@ -555,6 +590,31 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(str(analysis_result), reply_markup=_back_keyboard())
     except Exception as e:
         await update.message.reply_text(f"LLM error: {str(e)}", reply_markup=_back_keyboard())
+
+async def _send_long_text(update: Update, text: str, parse_mode=None):
+    MAX_LEN = 4096
+    if not text:
+        return
+    # Prefer splitting by newline to preserve formatting
+    chunks = []
+    buf = ""
+    for line in text.split("\n"):
+        piece = line + "\n"
+        if len(buf) + len(piece) <= MAX_LEN:
+            buf += piece
+        else:
+            if buf:
+                chunks.append(buf)
+                buf = ""
+            # Hard split very long lines
+            while len(piece) > MAX_LEN:
+                chunks.append(piece[:MAX_LEN])
+                piece = piece[MAX_LEN:]
+            buf = piece
+    if buf:
+        chunks.append(buf)
+    for c in chunks:
+        await update.message.reply_text(c, parse_mode=parse_mode)
 
 def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")

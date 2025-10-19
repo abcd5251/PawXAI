@@ -52,11 +52,11 @@ def twitter_analysis_buyer():
 
     # Browse available Twitter analysis agents
     relevant_agents = acp.browse_agents(
-        keyword="PawXAI",  
+        keyword=os.getenv("ACP_BROWSE_KEYWORD", "PawXAI"),
         sort_by=[
             ACPAgentSort.SUCCESSFUL_JOB_COUNT,
         ],
-        top_k=5,
+        top_k=int(os.getenv("ACP_TOP_K", "5")),
         graduation_status=ACPGraduationStatus.ALL,
         online_status=ACPOnlineStatus.ALL,
     )
@@ -69,12 +69,15 @@ def twitter_analysis_buyer():
     chosen_agent = relevant_agents[0]
     print(f"Selected agent: {chosen_agent}")
 
-    # Pick the first service offering
+    # Pick the service offering (configurable index)
     if not chosen_agent.offerings:
         print("Selected agent has no service offerings available.")
         return
-        
-    chosen_job_offering = chosen_agent.offerings[0]
+    offering_index = int(os.getenv("ACP_OFFERING_INDEX_ANALYZE", "0"))
+    if offering_index < 0 or offering_index >= len(chosen_agent.offerings):
+        print("Selected agent has no service offerings available.")
+        return
+    chosen_job_offering = chosen_agent.offerings[offering_index]
     print("job offering :", chosen_job_offering)
     
     # Request Twitter analysis for a specific username
