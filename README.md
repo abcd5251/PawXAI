@@ -1,117 +1,49 @@
-# Twitter Analysis with Virtuals ACP
+# PawXAI
+Your best Web3 information assistant on Telegram
 
-A comprehensive system for Twitter KOL (Key Opinion Leader) analysis using Virtuals ACP (Agent Communication Protocol). This project includes both seller agents that provide Twitter analysis services and buyer agents that can request analysis.
+## Project Demo
+- YouTube: https://youtu.be/KQkwbn4xXBg
 
-## Components
+## Features
+A compact toolkit that combines a Telegram bot with a local API to analyze crypto Twitter activity. It supports:
+- Latest news browsing
+- Twitter account analysis
+- KOL discovery with filters
+- Keyword monitoring for mentions
+- Trending Coins analysis with a one-click Uniswap Base Swap link
 
-### 1. Twitter Analysis API Server
-Provides the core Twitter analysis functionality via REST API.
-
-### 2. ACP Seller Agent (`acp_agent_with_twitter_api_updated.py`)
-A Virtuals ACP seller agent that:
-- Listens for Twitter analysis job requests
-- Extracts Twitter usernames from job requirements
-- Calls the analysis API
-- Delivers results back to buyers
-
-### 3. ACP Buyer Agent (`twitter_analysis_buyer.py`)
-A Virtuals ACP buyer agent that:
-- Browses available Twitter analysis agents
-- Initiates analysis jobs for specific Twitter users
-- Handles payment and evaluation
-
-## Setup
-
-### 1. Environment Configuration
-Copy the example environment file and configure your credentials:
-```bash
-cp .env.example .env
+**Setup**
+- Create `.env` (use `.env.example` as reference):
 ```
-
-Edit `.env` with your actual values:
-```bash
-# Required for ACP
-WHITELISTED_WALLET_PRIVATE_KEY=your_whitelisted_wallet_private_key
-SELLER_ENTITY_ID=1
-SELLER_AGENT_WALLET_ADDRESS=your_seller_wallet_address
-BUYER_ENTITY_ID=2
-BUYER_AGENT_WALLET_ADDRESS=your_buyer_wallet_address
-
-# API Configuration
-OPENAI_MODEL=""
-OPENAI_API_KEY=""
-SERPER_API=""
-QDRANT_DB_URL=""
-QDRANT_APIKEY=""
+AGENT_BUYER_WALLET_ADDRESS=0xYourWallet
+WHITELISTED_WALLET_PRIVATE_KEY=0xPrivateKey
+AGENT_SELLER_WALLET_ADDRESS=0xYourWallet
+AGENT_BUYER_WALLET_ADDRESS=0xYourWallet
+ANALYZE_API_TIMEOUT=50
+UPLOAD_JSON_URL=https://0x0.st
+# Optional: UPLOAD_JSON_URLS=https://0x0.st,https://paste.rs
+OPENAI_API_KEY=your_openai_key
 ```
+- Install dependencies: `pip install -r requirements.txt`
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+**How to Run**
+- Run API: `python main.py`
+- Run Bot: `python bot.py`
 
-### 3. Start the Analysis API Server
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+**Bot Usage**
+- The main menu includes: `latest trending`, `Analyze account`, `Find KOL`, `Monitor account`, `Trending Coins`.
+- Trending Coins:
+  - Runs analysis on latest tweets and replies with results.
+  - Adds a clickable Uniswap Base Swap link for quick trading.
+- Find KOL:
+  - Set filters step-by-step, execute the search, get a Top 3 summary and full JSON (shareable link + downloadable file).
+- Monitor account:
+  - Input a keyword (slug) to query recent mentions.
+- Analyze account:
+  - Enter a Twitter username and receive an analysis reply (or run the script directly).
 
-## Usage
 
-### Running the Seller Agent
-Start the Twitter analysis service provider:
-```bash
-python acp_agent_with_twitter_api_updated.py
-```
-
-The seller agent will:
-1. Wait for incoming job requests
-2. Accept valid Twitter analysis requests
-3. Process usernames and call the analysis API
-4. Deliver results to buyers
-
-### Running the Buyer Agent
-Request Twitter analysis for a specific user:
-```bash
-python twitter_analysis_buyer.py
-```
-
-The buyer agent will:
-1. Browse available Twitter analysis agents
-2. Prompt you for a Twitter username
-3. Initiate a job request
-4. Handle payment and receive results
-
-## Job Flow
-
-1. **REQUEST**: Buyer initiates job with Twitter username
-2. **NEGOTIATION**: Seller accepts the job
-3. **TRANSACTION**: Buyer pays, seller delivers analysis
-4. **EVALUATION**: Buyer evaluates and approves the work
-5. **COMPLETED**: Job finished successfully
-
-## Service Requirements
-
-When requesting analysis, provide the Twitter username in the service requirements:
-```json
-{
-  "username": "elonmusk",
-  "account": "elonmusk",
-  "request_type": "twitter_analysis"
-}
-```
-
-## Error Handling
-
-The system handles various error scenarios:
-- Invalid or missing Twitter usernames
-- API failures
-- Network timeouts
-- Job rejections
-
-## Legacy Files
-
-- `buyer.py` - Original ACP buyer example
-- `seller.py` - Original ACP seller example
-- `sample_acp_client.py` - ACP client samples
-
-These files serve as reference implementations for the ACP protocol.
+**Project Layout**
+- `bot.py`: Telegram bot entry point and handlers.
+- `main.py`: local API entry point (`python main.py`).
+- `utils/`: constants and helpers.

@@ -13,15 +13,14 @@ from models.model import OpenAIModel
 from prompts.qa import qa_prompt
 from prompts.trend import trend_prompt
 
-TWEETS_OUTPUT_FILE = os.getenv("TWEETS_OUTPUT_FILE", "./data/tweets_output.txt")
+load_dotenv()
+
+TWEETS_OUTPUT_FILE = "./data/tweets_output.txt"
 try:
     with open(TWEETS_OUTPUT_FILE, "r", encoding="utf-8") as f:
         content = f.read()
 except Exception:
     content = ""
-
-
-load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -222,11 +221,18 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if query.data == "trending_coins":
-        # Prompt user to select risk level
-        context.user_data["awaiting_news_coin"] = True
-        await query.message.reply_text(
-            "Please select your risk level\n- low risk for analyze ETH\n- high risk for other altcoin"
-        )
+        # Run trending analysis immediately without extra input
+        try:
+            trending_instance = OpenAIModel(system_prompt=trend_prompt, temperature=0)
+            prompt = f"trending_tweets:{content}OUTPUT:"
+            result, _, _ = trending_instance.generate_string_text(prompt)
+        except Exception as e:
+            result = f"Model invocation error: {str(e)}"
+        await query.message.reply_text(str(result))
+        uniswap_url = "https://app.uniswap.org/swap?chain=base&inputCurrency=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&outputCurrency=0x1111111111166b7fe7bd91427724b487980afc69&lng=en-US"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Open Uniswap (Base) Swap", url=uniswap_url)]])
+        await query.message.reply_text("Directly Trading link：", reply_markup=kb)
+        await query.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
         return
 
     if query.data == "latest_trending":
@@ -367,7 +373,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             file_path = os.getenv("TWEETS_OUTPUT_FILE", "./data/tweets_output.txt")
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
+                    tweets_content = f.read().strip()
             except FileNotFoundError:
                 await update.message.reply_text(f"File not found: {file_path}")
                 context.user_data["awaiting_news_coin"] = False
@@ -380,7 +386,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
             trending_instance = OpenAIModel(system_prompt=trend_prompt, temperature=0)
-            prompt = f"trending_tweets:{content}OUTPUT:"
+            prompt = f"trending_tweets:{tweets_content}OUTPUT:"
             try:
                 result, _, _ = trending_instance.generate_string_text(prompt)
             except Exception as e:

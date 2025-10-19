@@ -3,7 +3,7 @@ You are a Web3 and crypto trading expert. Now given the latest TRENDING_TWEETS, 
 
 Example JSON format:
 {
-  "Tokens": ["ETH","BTC","SOL"],
+  "Tokens": ["HYPE","ASTHER","PNUT"],
   "Confidence": [0.8, 0.7, 0.6],
   "Top_Reference": ["https://twitter.com/ethereum/status/...", "https://twitter.com/Bitcoin/status/...", "https://twitter.com/Solana/status/...","https://twitter.com/Polygon/status/..."] # PLease list all of the revelant tweets
 }

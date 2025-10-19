@@ -81,7 +81,7 @@ def twitter_analysis_buyer():
     print("job offering :", chosen_job_offering)
     
     # Request Twitter analysis for a specific username
-    twitter_username = input("Enter Twitter username to analyze (without @): ").strip()
+    twitter_username = _get_username()
     if not twitter_username:
         print("No username provided. Exiting.")
         return
@@ -101,6 +101,10 @@ def twitter_analysis_buyer():
     print("Listening for job updates...")
     # Keep the script running to listen for next steps
     threading.Event().wait()
+
+
+def _get_username() -> str:
+    return "DavideCrapis"
 
 
 if __name__ == "__main__":

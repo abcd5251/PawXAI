@@ -42,6 +42,21 @@ def to_slug(s: str) -> str:
     return s.lower().replace(" ", "-")
 
 
+def _get_keyword() -> str:
+    env_keyword = os.getenv("KEYWORD") or os.getenv("MONITOR_KEYWORD")
+    if env_keyword:
+        return env_keyword.strip()
+    try:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--keyword", "-k", help="Keyword for KOL monitor")
+        args, _ = parser.parse_known_args()
+        if args.keyword:
+            return args.keyword.strip()
+    except Exception:
+        pass
+    return _prompt_required_keyword("Enter keyword: ")
+
 def _extract_raw_list(body: Any) -> List[Any]:
     if isinstance(body, list):
         return body
@@ -218,7 +233,7 @@ def buyer_keyword_kol():
     logger.info(f"Chosen offering[{offering_index}]: {chosen_job_offering}")
 
     # Prompt for keyword (plain string for seller requirement)
-    keyword = _prompt_required_keyword("Enter keyword: ")
+    keyword = _get_keyword()
     slug = to_slug(keyword)
 
     # Optional: call local API to preview results
