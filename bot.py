@@ -158,6 +158,7 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
                 top_items = sorted_results[:3]
 
+                
                 # Build human-readable summary for top 3
                 lines = [f"Matched KOLs: {num}", "Top 3:"]
                 for i, item in enumerate(top_items, start=1):
@@ -165,12 +166,6 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     lines.append(f"   FollowersCount: {item.get('followersCount', 0)}")
                     lines.append(f"   FollowingCount: {item.get('friendsCount', 0)}")
                     lines.append(f"   KOLFollowersCount: {item.get('kolFollowersCount', 0)}")
-                    lines.append(f"   Description: {item.get('description', '')}")
-                    lines.append(f"   Location: {item.get('location', '')}")
-                    lines.append(f"   Website: {item.get('website', '')}")
-                    lines.append(f"   Ecosystem Tags: {item.get('ecosystem_tags', '')}")
-                    lines.append(f"   Language Tags: {item.get('language_tags', '')}")
-                    lines.append(f"   User Type Tags: {item.get('user_type_tags', '')}")
                     lines.append(f"   MBTI: {item.get('MBTI', '')}")
                     lines.append(f"   Summary: {item.get('summary', '')}")
                     lines.append("")
@@ -239,7 +234,8 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             result, _, _ = trending_instance.generate_string_text(prompt)
         except Exception as e:
             result = f"Model invocation error: {str(e)}"
-        await query.message.reply_text(str(result))
+        # Use safe chunked sender to avoid Telegram 4096-char limit
+        await _send_long_text(update, str(result))
         uniswap_url = "https://app.uniswap.org/swap?chain=base&inputCurrency=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&outputCurrency=0x1111111111166b7fe7bd91427724b487980afc69&lng=en-US"
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Open Uniswap (Base) Swap", url=uniswap_url)]])
         await query.message.reply_text("Directly Trading link：", reply_markup=kb)
@@ -358,6 +354,7 @@ def canonicalize_tags(input_text: str, allowed: list[str]):
     return canonical, invalid
 
 def summarize_filters(f: dict) -> str:
+    # Build a readable summary of current KOL filters
     lines = ["Current filters:"]
     if not f:
         lines.append("(none)")
@@ -648,11 +645,13 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         total_text = text
         prompt = f"trending_tweets:{content}\nquestion:{total_text}\nOUTPUT:"
         analysis_result, input_tokens_length, output_tokens_length = qa_instance.generate_string_text(prompt)
-        await update.message.reply_text(str(analysis_result), reply_markup=_back_keyboard())
+        # Use chunked sender to avoid hitting 4096-char limit
+        await _send_long_text(update, str(analysis_result))
+        await update.message.reply_text("Back to menu:", reply_markup=_back_keyboard())
     except Exception as e:
         await update.message.reply_text(f"LLM error: {str(e)}", reply_markup=_back_keyboard())
 
-async def _send_long_text(update: Update, text: str, parse_mode=None):
+async def _send_long_text(update: Update, text: str, parse_mode=None, reply_markup=None):
     MAX_LEN = 4096
     if not text:
         return
@@ -674,8 +673,18 @@ async def _send_long_text(update: Update, text: str, parse_mode=None):
             buf = piece
     if buf:
         chunks.append(buf)
-    for c in chunks:
-        await update.message.reply_text(c, parse_mode=parse_mode)
+    # Determine correct message context; support both message and callback_query
+    target_msg = getattr(update, "message", None)
+    if target_msg is None and getattr(update, "callback_query", None):
+        target_msg = update.callback_query.message
+    if target_msg is None:
+        return
+    for i, c in enumerate(chunks):
+        if reply_markup and i == 0:
+            # Attach markup on the first chunk only
+            await target_msg.reply_text(c, parse_mode=parse_mode, reply_markup=reply_markup)
+        else:
+            await target_msg.reply_text(c, parse_mode=parse_mode)
 
 def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
