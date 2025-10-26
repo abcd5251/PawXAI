@@ -9,6 +9,7 @@ A compact toolkit that combines a Telegram bot with a local API to analyze crypt
 - KOL discovery with filters
 - Keyword monitoring for mentions
 - Trending Coins analysis with a one-click Uniswap Base Swap link
+- Get specific address information
 
 **Setup**
 - git clone https://github.com/blockscout/mcp-server
@@ -26,6 +27,7 @@ OPENAI_API_KEY=your_openai_key
 **How to Run**
 - Run API: `python main.py`
 - Run Bot: `python bot.py`
+- Run Blockscout API: `python balance_api.py`
 
 **Bot Usage**
 - The main menu includes: `latest trending`, `Analyze account`, `Find KOL`, `Monitor account`, `Trending Coins`.

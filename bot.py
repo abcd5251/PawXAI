@@ -50,7 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     addr = os.getenv("AGENT_BUYER_WALLET_ADDRESS")
     if addr:
-        greeting = f"Hello! How can I help you\nYour Agent wallet address: {addr}"
+        greeting = f"Hello! How can I help you"
     else:
         greeting = "Hello! How can I help you\nYour Agent address not configured."
     await update.message.reply_text(greeting, reply_markup=reply_markup)
