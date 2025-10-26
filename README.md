@@ -1,8 +1,6 @@
 # PawXAI
 Your best Web3 information assistant on Telegram
 
-## Project Demo
-- YouTube: https://youtu.be/KQkwbn4xXBg
 
 ## Features
 A compact toolkit that combines a Telegram bot with a local API to analyze crypto Twitter activity. It supports:
@@ -13,12 +11,11 @@ A compact toolkit that combines a Telegram bot with a local API to analyze crypt
 - Trending Coins analysis with a one-click Uniswap Base Swap link
 
 **Setup**
+- git clone https://github.com/blockscout/mcp-server
+run with python -m blockscout_mcp_server --http --rest to start the MCP server endpoint
+
 - Create `.env` (use `.env.example` as reference):
 ```
-AGENT_BUYER_WALLET_ADDRESS=0xYourWallet
-WHITELISTED_WALLET_PRIVATE_KEY=0xPrivateKey
-AGENT_SELLER_WALLET_ADDRESS=0xYourWallet
-AGENT_BUYER_WALLET_ADDRESS=0xYourWallet
 ANALYZE_API_TIMEOUT=50
 UPLOAD_JSON_URL=https://0x0.st
 # Optional: UPLOAD_JSON_URLS=https://0x0.st,https://paste.rs

@@ -33,6 +33,7 @@ BUTTONS = [
     ("Find KOL", "find_kol"),
     ("Monitor account", "monitor_account"),
     ("Trending Coins", "trending_coins"),
+    ("Analyze Address", "analyze_address"),
 ]
 
 RESPONSES = {
@@ -41,6 +42,7 @@ RESPONSES = {
     "find_kol": "3 for Find KOL",
     "monitor_account": "4 for Monitor account",
     "trending_coins": "5 for Trending Coins",
+    "analyze_address": "6 for Analyze Address",
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -62,6 +64,15 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.message.reply_text(
             "Please enter a Twitter username (e.g., vitalik, elonmusk)."
         )
+        return
+
+    # Analyze Address flow: prompt for address then chain ID
+    if query.data == "analyze_address":
+        # Reset state for a clean flow
+        context.user_data["awaiting_address"] = True
+        context.user_data["awaiting_chain_id"] = False
+        context.user_data.pop("address_to_analyze", None)
+        await query.message.reply_text("Please enter the address (e.g., 0x...).")
         return
 
     # Monitor account flow: ask for keyword/slug
@@ -125,7 +136,7 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text("No filters set. Please add filters first.", reply_markup=_kol_keyboard())
             return
 
-        api_url = os.getenv("FILTER_COMBINED_URL", "http://localhost:8000/filter/combined")
+        api_url = os.getenv("FILTER_COMBINED_URL", "http://localhost:8010/filter/combined")
         timeout = float(os.getenv("ANALYZE_API_TIMEOUT", "50"))
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -365,6 +376,50 @@ def summarize_filters(f: dict) -> str:
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
 
+    # Analyze Address: capture address first, then chain ID, then call /tokens
+    if context.user_data.get("awaiting_address"):
+        address = text.strip()
+        # Basic address format check; continue even if invalid to let API decide
+        if not re.match(r"^0x[a-fA-F0-9]{40}$", address):
+            await update.message.reply_text("Address format looks invalid; continuing anyway.")
+        context.user_data["address_to_analyze"] = address
+        context.user_data["awaiting_address"] = False
+        context.user_data["awaiting_chain_id"] = True
+        await update.message.reply_text("Please enter the chain ID (e.g., 8453 for Base).")
+        return
+
+    if context.user_data.get("awaiting_chain_id"):
+        chain_id = text.strip()
+        address = context.user_data.get("address_to_analyze")
+        context.user_data["awaiting_chain_id"] = False
+        # Call the FastAPI /tokens endpoint in balance_api.py
+        # Configure URL via env BALANCE_API_TOKENS_URL, default http://127.0.0.1:8001/tokens
+        api_url = os.getenv("BALANCE_API_TOKENS_URL", "http://127.0.0.1:5050/tokens")
+        timeout = float(os.getenv("ANALYZE_API_TIMEOUT", "50"))
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(api_url, json={"chain_id": chain_id, "address": address})
+            if resp.status_code == 200:
+                # /tokens returns PlainTextResponse; stream text result back
+                await _send_long_text(update, resp.text)
+            else:
+                # Try to show structured error if present
+                try:
+                    err = resp.json()
+                    err_msg = err.get("detail") or err.get("message") or resp.text
+                except Exception:
+                    err_msg = resp.text
+                await update.message.reply_text(f"API error ({resp.status_code}): {err_msg[:500]}")
+        except httpx.HTTPError as e:
+            await update.message.reply_text(f"Request failed: {str(e)}")
+        finally:
+            # Reset flow state and return to main menu
+            context.user_data.pop("address_to_analyze", None)
+            context.user_data["awaiting_address"] = False
+            context.user_data["awaiting_chain_id"] = False
+            await update.message.reply_text("Back to menu:", reply_markup=_main_keyboard())
+        return
+
     # News Trading coin input
     if context.user_data.get("awaiting_news_coin"):
         risk_or_coin = text.strip()
@@ -412,7 +467,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         slug = text.strip()
         api_url_tpl = os.getenv(
             "MONITOR_USERS_API_URL",
-            "http://localhost:8000/keywordMonitors/{slug}/users",
+            "http://localhost:8010/keywordMonitors/{slug}/users",
         )
         api_url = api_url_tpl.replace("{slug}", slug)
         timeout = float(os.getenv("ANALYZE_API_TIMEOUT", "50"))
@@ -534,7 +589,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
             return
 
-        api_url = os.getenv("ANALYZE_API_URL", "http://localhost:8000/analyze-twitter-user")
+        api_url = os.getenv("ANALYZE_API_URL", "http://localhost:8010/analyze-twitter-user")
         timeout = float(os.getenv("ANALYZE_API_TIMEOUT", "50"))
 
         try:

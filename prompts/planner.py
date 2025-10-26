@@ -15,11 +15,22 @@ Available Functions:
 
 5. trending_coins — Retrieve the latest trending cryptocurrency coins from Twitter.
 
-6. other — Any request that doesn’t match the above categories.
+6. get address information - Retrieve detailed information about a specific address.
 
-Example Return:
-    {{
-        intent: "latest_trending"
-    }}
-Now base on the above functions, please classify the user request into one of the above functions.
+7. other — Any request that doesn’t match the above categories.
+
+Output Format:
+
+Return a JSON object in the following format:
+{{
+    "intent": "latest_trending"
+}}
+
+Example:
+User request: “Please give me ETH-related Chinese KOLs on Twitter.”
+Output:
+{{
+    "intent": "find_KOL"
+}}
+Now based on the above functions, please classify the user request into one of the above functions.
 """

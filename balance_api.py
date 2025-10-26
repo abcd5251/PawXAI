@@ -8,6 +8,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from models.model import OpenAIModel
 from prompts.readable import READABLE_PROMPT
+from prompts.readable_transactions import readable_transac_prompt
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -33,6 +34,11 @@ def short_hash(tx_hash: str) -> str:
     if not tx_hash or len(tx_hash) < 10:
         return tx_hash or ""
     return f"{tx_hash[:10]}…{tx_hash[-8:]}"
+
+def short_addr(addr: str) -> str:
+    if not addr or len(addr) < 10:
+        return addr or ""
+    return f"{addr[:6]}…{addr[-4:]}"
 
 def parse_iso_utc(ts: str) -> str:
     ts = ts.replace("Z", "+00:00")
@@ -155,38 +161,52 @@ async def address_info(req: BalanceHistoryRequest):
 class TransactionsRequest(BaseModel):
     chain_id: str
     address: str
-    age_from: Optional[str] = None
-    age_to: Optional[str] = None
-    methods: Optional[str] = None
 
-@app.post("/transactions")
+@app.post("/transactions", response_class=PlainTextResponse)
 async def transactions(req: TransactionsRequest):
     """
-    POST JSON: {"chain_id": "...", "address": "...", "age_from": "...", "age_to": "...", "methods": "0x..."}
-    Proxy to /v1/get_transactions_by_address
+    POST JSON: {"chain_id": "...", "address": "..."}
+    Proxy to /v1/get_transactions_by_address and return human-readable text.
     """
     params = {
         "chain_id": req.chain_id.strip(),
         "address": req.address.strip(),
     }
-    _add_if(params, "age_from", req.age_from)
-    _add_if(params, "age_to", req.age_to)
-    _add_if(params, "methods", req.methods)
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get("http://127.0.0.1:8000/v1/get_transactions_by_address", params=params)
             resp.raise_for_status()
-            return resp.json()
+            payload = resp.json()
     except httpx.HTTPStatusError as e:
         detail = f"Upstream error: {e.response.status_code}: {e.response.text}"
         raise HTTPException(status_code=502, detail=detail)
+    except (ValueError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse upstream response: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+    # Extract a list of items robustly
+    data_obj = payload.get("data", payload)
+    if isinstance(data_obj, dict):
+        items = data_obj.get("items") or data_obj.get("data") or data_obj.get("transactions") or []
+    elif isinstance(data_obj, list):
+        items = data_obj
+    else:
+        items = []
+
+    # Prefer LLM-rendered text; fall back to rule-based summary
+    try:
+        llm = OpenAIModel(system_prompt=readable_transac_prompt, temperature=0)
+        content = json.dumps({"address": req.address, "data": items}, ensure_ascii=False)
+        prompt = f"transfers_snapshot:{content}\nOUTPUT:"
+        text, _, _ = llm.generate_string_text(prompt)
+        return PlainTextResponse(text)
+    except Exception:
+        return PlainTextResponse(_render_transactions_fallback_text(items))
 
 class TokenTransfersRequest(BaseModel):
     chain_id: str
     address: str
-    age_from: Optional[str] = None
-    age_to: Optional[str] = None
-    token: Optional[str] = None
 
 @app.post("/token-transfers")
 async def token_transfers(req: TokenTransfersRequest):
@@ -198,9 +218,6 @@ async def token_transfers(req: TokenTransfersRequest):
         "chain_id": req.chain_id.strip(),
         "address": req.address.strip(),
     }
-    _add_if(params, "age_from", req.age_from)
-    _add_if(params, "age_to", req.age_to)
-    _add_if(params, "token", req.token)
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get("http://127.0.0.1:8000/v1/get_token_transfers_by_address", params=params)
@@ -436,6 +453,103 @@ def _render_fallback_text(doc: Dict[str, Any]) -> str:
         lines.append(f"Suspicious or look-alike tokens: {', '.join(doc['suspicious'])}")
     lines.append("")
     lines.append("Note: Crypto assets are volatile. This is a snapshot and rough estimation; do your own research before making decisions.")
+    return "\n".join(lines)
+
+def _render_transactions_fallback_text(items: List[Dict[str, Any]]) -> str:
+    if not items:
+        return "No transactions found."
+
+    def _pick_ts(it: Dict[str, Any]) -> str:
+        return it.get("timestamp") or it.get("block_timestamp") or ""
+
+    # Sort chronologically
+    try:
+        items_sorted = sorted(items, key=lambda x: _pick_ts(x))
+    except Exception:
+        items_sorted = items
+
+    start_ts_raw = _pick_ts(items_sorted[0]) if items_sorted else ""
+    end_ts_raw = _pick_ts(items_sorted[-1]) if items_sorted else ""
+    start_ts = parse_iso_utc(start_ts_raw) if start_ts_raw else "(unknown)"
+    end_ts = parse_iso_utc(end_ts_raw) if end_ts_raw else "(unknown)"
+
+    lines = []
+    lines.append(f"Count: {len(items_sorted)}")
+    lines.append(f"Period: {start_ts} → {end_ts}")
+    lines.append("Notes: Amounts shown when available; gas fee is native ≈ fee/1e18.")
+    lines.append("")
+
+    counterparties: Dict[str, int] = {}
+    token_volume_usd: Dict[str, Decimal] = {}
+
+    for it in items_sorted:
+        ts_raw = _pick_ts(it)
+        ts = parse_iso_utc(ts_raw) if ts_raw else "(unknown time)"
+
+        txh = it.get("hash") or it.get("transaction_hash") or ""
+        fee_str = it.get("fee") or "0"
+        try:
+            fee_eth = wei_to_eth(int(str(fee_str)))
+            fee_fmt = fmt_eth(fee_eth)
+        except Exception:
+            fee_fmt = "unknown"
+
+        frm = it.get("from_address") or ""
+        to = it.get("to_address") or ""
+        if frm:
+            counterparties[frm] = counterparties.get(frm, 0) + 1
+        if to:
+            counterparties[to] = counterparties.get(to, 0) + 1
+
+        method = str(it.get("method") or "").lower()
+        action = "Transfer"
+        if "swap" in method:
+            action = "Swap/Trade"
+        elif method == "claim":
+            action = "Claim"
+
+        token = it.get("token") or {}
+        symbol = token.get("symbol") or token.get("name") or "(unknown)"
+        price = _to_decimal(token.get("exchange_rate"))
+
+        total = it.get("total") or {}
+        value_str = total.get("value")
+        decimals_raw = total.get("decimals") or token.get("decimals")
+        amount_fmt = "unknown"
+        usd_str = "no available price"
+        try:
+            decimals = int(str(decimals_raw)) if decimals_raw is not None else 18
+            value_int = int(str(value_str)) if value_str is not None else None
+            if value_int is not None:
+                amount = Decimal(value_int) / Decimal(10 ** decimals)
+                amount_fmt = _fmt_amount(amount)
+                if price is not None:
+                    usd_val = amount * price
+                    usd_str = f"≈ ${_fmt_usd(usd_val)}"
+                    if symbol:
+                        token_volume_usd[symbol] = token_volume_usd.get(symbol, Decimal("0")) + usd_val
+        except Exception:
+            pass
+
+        line = (
+            f"- {ts} — {action} — {short_addr(frm)} → {short_addr(to)} — "
+            f"{amount_fmt} {symbol} ({usd_str}); gas ≈ {fee_fmt} — {short_hash(txh)}"
+        )
+        lines.append(line)
+
+    # Summary
+    lines.append("")
+    if counterparties:
+        top_ctps = sorted(counterparties.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        lines.append("Top counterparties:")
+        for addr, cnt in top_ctps:
+            lines.append(f"- {short_addr(addr)}: {cnt} interactions")
+    if token_volume_usd:
+        top_tokens = sorted(token_volume_usd.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        lines.append("Top tokens by estimated USD volume:")
+        for sym, usd in top_tokens:
+            lines.append(f"- {sym}: ≈ ${_fmt_usd(usd)}")
+
     return "\n".join(lines)
 
 if __name__ == "__main__":
