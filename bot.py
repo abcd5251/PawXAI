@@ -228,12 +228,15 @@ async def on_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if query.data == "trending_coins":
         # Run trending analysis immediately without extra input
-        try:
-            trending_instance = OpenAIModel(system_prompt=trend_prompt, temperature=0)
-            prompt = f"trending_tweets:{content}OUTPUT:"
-            result, _, _ = trending_instance.generate_string_text(prompt)
-        except Exception as e:
-            result = f"Model invocation error: {str(e)}"
+        with open("dd.txt", "r") as f:
+            result = f.read()
+        
+        # try:
+        #     trending_instance = OpenAIModel(system_prompt=trend_prompt, temperature=0)
+        #     prompt = f"trending_tweets:{content}OUTPUT:"
+        #     result, _, _ = trending_instance.generate_string_text(prompt)
+        # except Exception as e:
+        #     result = f"Model invocation error: {str(e)}"
         # Use safe chunked sender to avoid Telegram 4096-char limit
         await _send_long_text(update, str(result))
         uniswap_url = "https://app.uniswap.org/swap?chain=base&inputCurrency=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&outputCurrency=0x1111111111166b7fe7bd91427724b487980afc69&lng=en-US"

@@ -4,8 +4,8 @@ from typing import Optional, Dict, Any, Union, List
 ### Twitter KOL Analysis Models
 class TwitterUsernameRequest(BaseModel):
     username: str
-    created_after: Optional[str] = "2025-09-01T12:00:00Z"
-    created_before: Optional[str] = "2025-09-20T23:59:59Z"
+    created_after: Optional[str] = "2025-10-19T12:00:00Z"
+    created_before: Optional[str] = "2025-10-24T23:59:59Z"
 
 class TwitterAnalysisResponse(BaseModel):
     status: str
